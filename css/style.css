@@ -1,0 +1,763 @@
+/* =============================================================================
+   Expense & Budget Visualizer — css/style.css
+   ============================================================================= */
+
+/* ---------------------------------------------------------------------------
+   CSS Custom Properties — Light theme (default)
+   All color decisions live here so dark mode is a single attribute swap.
+   --------------------------------------------------------------------------- */
+
+:root,
+[data-theme="light"] {
+  --color-bg:           #f5f5f5;
+  --color-surface:      #ffffff;
+  --color-border:       #d1d5db;
+  --color-border-light: #e5e7eb;
+
+  --color-text:         #1a1a1a;
+  --color-text-muted:   #6b7280;
+  --color-label:        #374151;
+
+  --color-primary:      #2563eb;
+  --color-primary-dark: #1d4ed8;
+  --color-primary-ring: #1e40af;
+
+  --color-danger:       #dc2626;
+  --color-danger-dark:  #b91c1c;
+  --color-danger-ring:  #991b1b;
+
+  --color-error-text:   #b91c1c;
+  --color-error-bg:     #fef2f2;
+  --color-error-border: #fca5a5;
+
+  --color-over-limit-bg:     #fff1f2;
+  --color-over-limit-border: #fda4af;
+  --color-over-limit-text:   #9f1239;
+
+  --color-monthly-row-bg:    #f9fafb;
+  --color-monthly-row-hover: #f3f4f6;
+
+  --color-summary-bg:   #f0fdf4;
+  --color-summary-text: #166534;
+
+  --color-btn-ghost:    #6b7280;
+  --color-btn-ghost-bg: transparent;
+  --color-btn-ghost-hover: #f3f4f6;
+
+  --color-secondary-bg:    #e5e7eb;
+  --color-secondary-text:  #1a1a1a;
+  --color-secondary-hover: #d1d5db;
+
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+[data-theme="dark"] {
+  --color-bg:           #111827;
+  --color-surface:      #1f2937;
+  --color-border:       #374151;
+  --color-border-light: #374151;
+
+  --color-text:         #f9fafb;
+  --color-text-muted:   #9ca3af;
+  --color-label:        #d1d5db;
+
+  --color-primary:      #3b82f6;
+  --color-primary-dark: #2563eb;
+  --color-primary-ring: #60a5fa;
+
+  --color-danger:       #ef4444;
+  --color-danger-dark:  #dc2626;
+  --color-danger-ring:  #f87171;
+
+  --color-error-text:   #fca5a5;
+  --color-error-bg:     #450a0a;
+  --color-error-border: #7f1d1d;
+
+  --color-over-limit-bg:     #4c0519;
+  --color-over-limit-border: #9f1239;
+  --color-over-limit-text:   #fda4af;
+
+  --color-monthly-row-bg:    #111827;
+  --color-monthly-row-hover: #374151;
+
+  --color-summary-bg:   #052e16;
+  --color-summary-text: #86efac;
+
+  --color-btn-ghost:    #9ca3af;
+  --color-btn-ghost-bg: transparent;
+  --color-btn-ghost-hover: #374151;
+
+  --color-secondary-bg:    #374151;
+  --color-secondary-text:  #f9fafb;
+  --color-secondary-hover: #4b5563;
+
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.4);
+}
+
+/* ---------------------------------------------------------------------------
+   Reset & box model
+   --------------------------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   Base typography
+   Body: 16px | h1: 24px | h2: 20px  (all satisfy ≥ 14px / ≥ 4px gap rules)
+   --------------------------------------------------------------------------- */
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--color-text);
+  background-color: var(--color-bg);
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+h2 {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 0.75rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Layout
+   --------------------------------------------------------------------------- */
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  max-width: 800px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Header
+   --------------------------------------------------------------------------- */
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 0;
+  border-bottom: 2px solid var(--color-border);
+  margin-bottom: 1.5rem;
+}
+
+/* Dark/light toggle button */
+.btn-icon {
+  background: var(--color-secondary-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  width: 2.5rem;
+  height: 2.5rem;
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease;
+  flex-shrink: 0;
+}
+
+.btn-icon:hover {
+  background: var(--color-secondary-hover);
+}
+
+.btn-icon:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------------------
+   Main content
+   --------------------------------------------------------------------------- */
+
+.app-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding-bottom: 2rem;
+}
+
+/* Shared card style */
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 1.25rem;
+  box-shadow: var(--shadow-card);
+  transition: background-color 0.25s ease, border-color 0.25s ease;
+}
+
+/* ---------------------------------------------------------------------------
+   <details> / <summary> collapsible panels
+   --------------------------------------------------------------------------- */
+
+details > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  list-style: none;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text);
+  padding: 0.1rem 0;
+  user-select: none;
+}
+
+details > summary::-webkit-details-marker {
+  display: none;
+}
+
+details > summary:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.summary-arrow {
+  font-size: 14px;
+  color: var(--color-text-muted);
+  transition: transform 0.2s ease;
+}
+
+details[open] > summary .summary-arrow {
+  transform: rotate(90deg);
+}
+
+details > *:not(summary) {
+  margin-top: 1rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Form section
+   --------------------------------------------------------------------------- */
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+}
+
+label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-label);
+}
+
+input[type="text"],
+input[type="number"],
+select {
+  font-size: 16px;
+  color: var(--color-text);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  width: 100%;
+  max-width: 100%;
+  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus,
+select:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+  border-color: var(--color-primary);
+}
+
+.field-error {
+  font-size: 14px;
+  color: var(--color-error-text);
+  min-height: 1.25rem;
+}
+
+.btn-primary {
+  display: inline-block;
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+  background-color: var(--color-primary);
+  border: none;
+  border-radius: 6px;
+  padding: 0.6rem 1.25rem;
+  cursor: pointer;
+  width: 100%;
+  transition: background-color 0.2s ease;
+}
+
+.btn-primary:hover {
+  background-color: var(--color-primary-dark);
+}
+
+.btn-primary:focus {
+  outline: 2px solid var(--color-primary-ring);
+  outline-offset: 2px;
+}
+
+.btn-secondary {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-secondary-text);
+  background-color: var(--color-secondary-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 0.4rem 0.9rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background-color: var(--color-secondary-hover);
+}
+
+.btn-secondary:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.btn-ghost {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-btn-ghost);
+  background-color: var(--color-btn-ghost-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 0.4rem 0.9rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.2s ease;
+}
+
+.btn-ghost:hover {
+  background-color: var(--color-btn-ghost-hover);
+}
+
+.btn-ghost:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.hint {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  margin-bottom: 0.5rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Custom Categories section
+   --------------------------------------------------------------------------- */
+
+.add-category-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.add-category-row input[type="text"] {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+input[type="color"] {
+  width: 2.5rem;
+  height: 2.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 0.15rem;
+  cursor: pointer;
+  background: var(--color-surface);
+  flex-shrink: 0;
+}
+
+input[type="color"]:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+#custom-category-list {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.category-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.35);
+}
+
+.category-chip.builtin {
+  opacity: 0.85;
+  cursor: default;
+}
+
+.category-chip .chip-remove {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.85);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+  display: flex;
+  align-items: center;
+}
+
+.category-chip .chip-remove:hover {
+  color: #ffffff;
+}
+
+.category-chip .chip-remove:focus {
+  outline: 2px solid rgba(255,255,255,0.8);
+  border-radius: 50%;
+}
+
+/* ---------------------------------------------------------------------------
+   Spending Limit section
+   --------------------------------------------------------------------------- */
+
+.limit-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.limit-row label {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.limit-row input[type="number"] {
+  flex: 1 1 120px;
+  min-width: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   Total balance section
+   --------------------------------------------------------------------------- */
+
+.balance-section {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+
+.balance-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+#total-balance {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+/* ---------------------------------------------------------------------------
+   Monthly Summary section
+   --------------------------------------------------------------------------- */
+
+.monthly-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.monthly-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  background: var(--color-monthly-row-bg);
+  font-size: 15px;
+  transition: background-color 0.15s ease;
+}
+
+.monthly-row:hover {
+  background: var(--color-monthly-row-hover);
+}
+
+.monthly-month {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.monthly-count {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.monthly-total {
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.monthly-empty {
+  font-size: 15px;
+  color: var(--color-text-muted);
+  font-style: italic;
+  text-align: center;
+  padding: 0.75rem 0;
+}
+
+/* ---------------------------------------------------------------------------
+   Transaction list section
+   --------------------------------------------------------------------------- */
+
+.list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.list-header h2 {
+  margin-bottom: 0;
+}
+
+.sort-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.sort-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.sort-controls select {
+  font-size: 13px;
+  padding: 0.3rem 0.6rem;
+  width: auto;
+}
+
+#transaction-list {
+  list-style: none;
+  overflow-y: auto;
+  max-height: 320px;
+}
+
+#transaction-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.6rem 0.5rem;
+  border-bottom: 1px solid var(--color-border-light);
+  font-size: 16px;
+  color: var(--color-text);
+  flex-wrap: wrap;
+  border-radius: 4px;
+  transition: background-color 0.15s ease;
+}
+
+#transaction-list li:last-child {
+  border-bottom: none;
+}
+
+/* Over-limit highlight */
+#transaction-list li.over-limit {
+  background-color: var(--color-over-limit-bg);
+  border-left: 3px solid var(--color-over-limit-border);
+  padding-left: 0.4rem;
+}
+
+#transaction-list li.over-limit .tx-amount {
+  color: var(--color-over-limit-text);
+}
+
+.tx-name {
+  flex: 1 1 auto;
+  font-weight: 500;
+  word-break: break-word;
+}
+
+.tx-amount {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.tx-category {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  white-space: nowrap;
+}
+
+.btn-delete {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+  background-color: var(--color-danger);
+  border: none;
+  border-radius: 4px;
+  padding: 0.3rem 0.65rem;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background-color 0.2s ease;
+}
+
+.btn-delete:hover {
+  background-color: var(--color-danger-dark);
+}
+
+.btn-delete:focus {
+  outline: 2px solid var(--color-danger-ring);
+  outline-offset: 2px;
+}
+
+.empty-state {
+  color: var(--color-text-muted);
+  font-style: italic;
+  padding: 0.75rem 0;
+  border-bottom: none !important;
+  justify-content: center !important;
+}
+
+/* ---------------------------------------------------------------------------
+   Chart section
+   --------------------------------------------------------------------------- */
+
+.chart-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+#spending-chart {
+  max-width: 100%;
+  height: auto;
+}
+
+#chart-empty {
+  font-size: 16px;
+  color: var(--color-text-muted);
+  font-style: italic;
+  text-align: center;
+  padding: 1rem 0;
+}
+
+/* ---------------------------------------------------------------------------
+   Error banner
+   --------------------------------------------------------------------------- */
+
+.error-banner {
+  background-color: var(--color-error-bg);
+  border: 1px solid var(--color-error-border);
+  border-radius: 6px;
+  color: var(--color-error-text);
+  font-size: 14px;
+  padding: 0.75rem 1rem;
+}
+
+.error-banner[hidden] {
+  display: none;
+}
+
+/* ---------------------------------------------------------------------------
+   Responsive — 320px viewport
+   --------------------------------------------------------------------------- */
+
+@media (max-width: 400px) {
+  body {
+    font-size: 14px;
+  }
+
+  h1 {
+    font-size: 20px;
+  }
+
+  h2 {
+    font-size: 18px;
+  }
+
+  .app-container {
+    padding: 0 0.5rem;
+  }
+
+  #transaction-list {
+    max-height: 240px;
+  }
+
+  #transaction-list li {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .btn-delete {
+    align-self: flex-end;
+  }
+
+  .balance-section {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .list-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .limit-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .limit-row input[type="number"] {
+    width: 100%;
+  }
+
+  .add-category-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .add-category-row input[type="color"] {
+    width: 100%;
+    height: 2.5rem;
+  }
+}

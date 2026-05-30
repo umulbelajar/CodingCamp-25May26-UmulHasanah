@@ -33,7 +33,7 @@ Implement a fully client-side Expense & Budget Visualizer using plain HTML, CSS,
   - [ ] 3.1 Implement `saveToStorage(transactions)` — serializes array to JSON and writes to `localStorage` under `STORAGE_KEY`; throws `Error("STORAGE_WRITE_FAILED")` on failure
     - _Requirements: 6.1, 6.2_
 
-  - [ ] 3.2 Implement `loadFromStorage()` — reads `STORAGE_KEY`, returns `[]` if absent or empty string, parses JSON, validates each transaction object (id string, name string 1–100 chars, numeric amount 0.01–999,999,999.99, valid category); throws `Error("STORAGE_READ_FAILED")` on corrupt data
+  - [x] 3.2 Implement `loadFromStorage()` — reads `STORAGE_KEY`, returns `[]` if absent or empty string, parses JSON, validates each transaction object (id string, name string 1–100 chars, numeric amount 0.01–999,999,999.99, valid category); throws `Error("STORAGE_READ_FAILED")` on corrupt data
     - _Requirements: 6.3, 6.4, 6.5_
 
 - [ ] 4. Checkpoint — Ensure all model tests pass

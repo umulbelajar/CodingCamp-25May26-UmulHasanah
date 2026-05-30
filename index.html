@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Expense &amp; Budget Visualizer</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <!-- Chart.js via CDN (approved alternative to Canvas 2D API) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="app-container">
+
+    <!-- ===== Header ===== -->
+    <header class="app-header">
+      <h1>Expense &amp; Budget Visualizer</h1>
+      <!-- Dark / Light mode toggle -->
+      <button
+        id="theme-toggle"
+        class="btn-icon"
+        aria-label="Switch to dark mode"
+        title="Toggle dark/light mode"
+      >
+        <span id="theme-icon" aria-hidden="true">🌙</span>
+      </button>
+    </header>
+
+    <!-- ===== Main content ===== -->
+    <main class="app-main">
+
+      <!-- ---- Add Transaction Form ---- -->
+      <section class="form-section card" aria-labelledby="form-heading">
+        <h2 id="form-heading">Add Transaction</h2>
+
+        <form id="transaction-form" novalidate>
+
+          <div class="field-group">
+            <label for="item-name">Item Name</label>
+            <input
+              type="text"
+              id="item-name"
+              name="item-name"
+              maxlength="100"
+              placeholder="e.g. Lunch"
+              autocomplete="off"
+            />
+            <span class="field-error" id="error-name" role="alert" aria-live="polite"></span>
+          </div>
+
+          <div class="field-group">
+            <label for="amount">Amount ($)</label>
+            <input
+              type="number"
+              id="amount"
+              name="amount"
+              step="0.01"
+              min="0.01"
+              placeholder="e.g. 12.50"
+            />
+            <span class="field-error" id="error-amount" role="alert" aria-live="polite"></span>
+          </div>
+
+          <div class="field-group">
+            <label for="category">Category</label>
+            <select id="category" name="category">
+              <option value="" disabled selected>Select a category</option>
+              <option value="Food">Food</option>
+              <option value="Transport">Transport</option>
+              <option value="Fun">Fun</option>
+            </select>
+            <span class="field-error" id="error-category" role="alert" aria-live="polite"></span>
+          </div>
+
+          <button type="submit" class="btn-primary">Add Transaction</button>
+
+        </form>
+      </section>
+
+      <!-- ---- Custom Categories Manager ---- -->
+      <section class="card custom-categories-section" aria-labelledby="cat-heading">
+        <details>
+          <summary id="cat-heading">
+            <span>Manage Categories</span>
+            <span class="summary-arrow" aria-hidden="true">▸</span>
+          </summary>
+          <div class="custom-categories-body">
+            <p class="hint">Add your own categories. Built-in categories (Food, Transport, Fun) cannot be removed.</p>
+            <div class="add-category-row">
+              <input
+                type="text"
+                id="new-category-name"
+                maxlength="30"
+                placeholder="New category name"
+                aria-label="New category name"
+              />
+              <input
+                type="color"
+                id="new-category-color"
+                value="#a78bfa"
+                aria-label="Category color"
+                title="Pick a color for this category"
+              />
+              <button type="button" id="btn-add-category" class="btn-secondary">Add</button>
+            </div>
+            <span class="field-error" id="error-new-category" role="alert" aria-live="polite"></span>
+            <ul id="custom-category-list" aria-label="Custom categories"></ul>
+          </div>
+        </details>
+      </section>
+
+      <!-- ---- Spending Limit ---- -->
+      <section class="card limit-section" aria-labelledby="limit-heading">
+        <details>
+          <summary id="limit-heading">
+            <span>Spending Limit</span>
+            <span class="summary-arrow" aria-hidden="true">▸</span>
+          </summary>
+          <div class="limit-body">
+            <p class="hint">Transactions that exceed this amount will be highlighted in red.</p>
+            <div class="limit-row">
+              <label for="spending-limit">Limit per transaction ($)</label>
+              <input
+                type="number"
+                id="spending-limit"
+                step="0.01"
+                min="0"
+                placeholder="e.g. 50.00"
+                aria-describedby="limit-hint"
+              />
+              <button type="button" id="btn-set-limit" class="btn-secondary">Set</button>
+              <button type="button" id="btn-clear-limit" class="btn-ghost">Clear</button>
+            </div>
+            <p id="current-limit-display" class="hint"></p>
+          </div>
+        </details>
+      </section>
+
+      <!-- ---- Total Balance ---- -->
+      <section class="balance-section card" aria-label="Total balance">
+        <p class="balance-label">Total Spent</p>
+        <p id="total-balance" aria-live="polite">$0.00</p>
+      </section>
+
+      <!-- ---- Monthly Summary ---- -->
+      <section class="card monthly-section" aria-labelledby="monthly-heading">
+        <details>
+          <summary id="monthly-heading">
+            <span>Monthly Summary</span>
+            <span class="summary-arrow" aria-hidden="true">▸</span>
+          </summary>
+          <div id="monthly-summary-body" class="monthly-body">
+            <!-- Populated by renderMonthlySummary() -->
+          </div>
+        </details>
+      </section>
+
+      <!-- ---- Transaction List ---- -->
+      <section class="list-section card" aria-labelledby="list-heading">
+        <div class="list-header">
+          <h2 id="list-heading">Transactions</h2>
+          <!-- Sort controls -->
+          <div class="sort-controls" role="group" aria-label="Sort transactions">
+            <label for="sort-select" class="sort-label">Sort by</label>
+            <select id="sort-select" aria-label="Sort transactions by">
+              <option value="default">Date added</option>
+              <option value="amount-asc">Amount ↑</option>
+              <option value="amount-desc">Amount ↓</option>
+              <option value="category-asc">Category A–Z</option>
+              <option value="category-desc">Category Z–A</option>
+            </select>
+          </div>
+        </div>
+        <ul id="transaction-list" aria-label="Transaction list">
+          <!-- Populated by renderList() -->
+        </ul>
+      </section>
+
+      <!-- ---- Pie Chart ---- -->
+      <section class="chart-section card" aria-labelledby="chart-heading">
+        <h2 id="chart-heading">Spending by Category</h2>
+        <canvas
+          id="spending-chart"
+          role="img"
+          aria-label="Pie chart showing spending distribution by category"
+          width="300"
+          height="300"
+        ></canvas>
+        <p id="chart-empty">No data to display</p>
+      </section>
+
+      <!-- ---- Error Banner (storage / corrupt data errors) ---- -->
+      <div id="error-banner" class="error-banner" role="alert" aria-live="assertive" hidden></div>
+
+    </main>
+
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
