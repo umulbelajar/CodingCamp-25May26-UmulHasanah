@@ -1,245 +1,220 @@
-# Design Document: Expense and Budget Visualizer
+# Design Document: Expense & Budget Visualizer
 
 ## Overview
 
-The Expense and Budget Visualizer is a fully client-side, zero-dependency web application built with plain HTML, CSS, and Vanilla JavaScript. All data is persisted in the browser's `localStorage` under namespaced keys. The application renders charts using the Canvas API (primary) and inline SVG (fallback/alternative), with no third-party charting libraries.
+The Expense & Budget Visualizer is a fully client-side web application built with plain HTML, CSS, and Vanilla JavaScript. It has no build step, no framework, and no backend. All data is persisted in the browser's `localStorage` under a single fixed key. The application renders a pie chart using the Canvas API (or an approved CDN chart library as an alternative).
 
-The architecture follows a **Model-View-Controller (MVC)** pattern adapted for a single-file or multi-file vanilla JS context:
+The architecture follows a **Model-View-Controller (MVC)** pattern adapted for a single-page, single-JS-file vanilla JS context:
 
-- **Model** — pure data-access and business-logic functions that read/write `localStorage`
-- **View** — DOM-manipulation functions that render HTML and Canvas/SVG output
-- **Controller** — event handlers that wire user interactions to model operations and trigger view updates
+- **Model** — pure functions that manage the in-memory transaction array, validate inputs, and read/write `localStorage`
+- **View** — DOM-manipulation functions that render the transaction list, total balance, and pie chart
+- **Controller** — event handlers wired in `app.js` that connect user interactions to model operations and trigger view updates
 
-All state is derived from `localStorage` on each render cycle; there is no in-memory reactive store. This keeps the design simple and ensures the UI is always consistent with persisted data.
+State is held in a single in-memory array (`transactions`) that is always kept in sync with `localStorage`. On every mutation (add or delete), the array is serialized and written to `localStorage` before the UI is updated.
 
 ### Key Design Decisions
 
 | Decision | Rationale |
 |---|---|
-| No framework | Requirement TC-1; keeps the app a single HTML file |
-| Canvas API for charts | Widest browser support, fine-grained control, no dependencies |
-| Derive state from localStorage on render | Avoids sync bugs between in-memory state and persisted state |
-| Namespaced localStorage keys (`evbv_*`) | Prevents collisions with other apps (Requirement 7.5) |
-| UUID v4 for record IDs | Enables deterministic deduplication during import (Requirement 9.1) |
-| EARS-style validation before write | Ensures localStorage is never written with invalid data |
+| Single `js/app.js` file | Required by TC-4; all MVC layers are organized as named function groups within one file |
+| Canvas API for pie chart | Widest browser support, no dependencies; CDN chart library (e.g., Chart.js) is an approved alternative |
+| In-memory array + localStorage sync | Simple, predictable; avoids re-reading localStorage on every render |
+| Fixed key `expense_budget_visualizer_data` | Prevents collisions; satisfies Requirement 6 fixed-key constraint |
+| Crypto-based UUID with Math.random fallback | Unique IDs for transactions without external libraries |
+| Reverse-insertion-order display | Most recent transaction at top (Requirement 2.4) |
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        index.html                           │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐  │
-│  │   HTML/CSS   │  │  Controller  │  │   Model Layer    │  │
-│  │  (Structure  │  │  (app.js)    │  │  (storage.js,    │  │
-│  │  & Styles)   │  │  Event       │  │   model.js)      │  │
-│  │              │  │  Handlers    │  │  Pure functions  │  │
-│  └──────────────┘  └──────┬───────┘  └────────┬─────────┘  │
-│                           │                   │             │
-│                    ┌──────▼───────┐    ┌──────▼─────────┐  │
-│                    │  View Layer  │    │  localStorage  │  │
-│                    │  (render.js, │    │  evbv_expenses │  │
-│                    │  charts.js)  │    │  evbv_budgets  │  │
-│                    │  DOM + Canvas│    │  evbv_categories│ │
-│                    └──────────────┘    └────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                         index.html                           │
+│                                                              │
+│  ┌─────────────┐   ┌──────────────────────────────────────┐  │
+│  │  css/       │   │           js/app.js                  │  │
+│  │  style.css  │   │                                      │  │
+│  └─────────────┘   │  ┌──────────┐  ┌──────────────────┐ │  │
+│                    │  │  Model   │  │      View        │ │  │
+│                    │  │          │  │                  │ │  │
+│                    │  │ validate │  │ renderList()     │ │  │
+│                    │  │ addTx()  │  │ renderBalance()  │ │  │
+│                    │  │ deleteTx │  │ renderChart()    │ │  │
+│                    │  │ load()   │  │ renderErrors()   │ │  │
+│                    │  │ save()   │  │ resetForm()      │ │  │
+│                    │  └────┬─────┘  └────────┬─────────┘ │  │
+│                    │       │                 │           │  │
+│                    │  ┌────▼─────────────────▼─────────┐ │  │
+│                    │  │         Controller              │ │  │
+│                    │  │  handleFormSubmit()             │ │  │
+│                    │  │  handleDeleteClick()            │ │  │
+│                    │  │  init()                         │ │  │
+│                    │  └─────────────────────────────────┘ │  │
+│                    └──────────────────────────────────────┘  │
+│                                                              │
+│  ┌──────────────────────────────────────────────────────┐    │
+│  │                   localStorage                       │    │
+│  │   key: "expense_budget_visualizer_data"              │    │
+│  │   value: JSON array of Transaction objects           │    │
+│  └──────────────────────────────────────────────────────┘    │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-### Module Responsibilities
+### Data Flow
 
-| Module | Responsibility |
-|---|---|
-| `storage.js` | Raw read/write/parse of `localStorage`; error handling for unavailability and corruption |
-| `model.js` | Business logic: CRUD for expenses, budgets, categories; validation; ID generation |
-| `render.js` | DOM rendering: expense list, summary panel, forms, filters, modals |
-| `charts.js` | Canvas/SVG chart rendering: pie chart, bar chart, tooltips |
-| `app.js` | Controller: event listeners, orchestrates model → view pipeline |
-
-For a single-file deployment, all modules are inlined as IIFE blocks within `<script>` tags.
+1. **App load** → `init()` reads localStorage → deserializes → validates → populates `transactions[]` → calls `renderAll()`
+2. **Add transaction** → `handleFormSubmit()` → `validateInput()` → `addTransaction()` → `saveToStorage()` → `renderAll()`
+3. **Delete transaction** → `handleDeleteClick(id)` → snapshot pre-state → `deleteTransaction(id)` → `saveToStorage()` (on failure: rollback + show error) → `renderAll()`
 
 ---
 
 ## Components and Interfaces
 
-### 1. Expense Form (`ExpenseForm`)
+### 1. Input Form
 
-Renders inside a modal or side panel. Fields:
+Rendered in `index.html` as a `<form id="transaction-form">`.
 
-| Field | Type | Validation |
+| Field | Element | Constraints |
 |---|---|---|
-| Amount | `<input type="number">` | Positive number, required |
-| Category | `<select>` | Non-empty, required |
-| Date | `<input type="date">` | Valid YYYY-MM-DD, not after today, required |
-| Description | `<textarea maxlength="200">` | Optional, ≤ 200 chars |
+| Item Name | `<input type="text" maxlength="100">` | Required, 1–100 characters |
+| Amount | `<input type="number" step="0.01" min="0.01">` | Required, 0.01–999,999,999.99 |
+| Category | `<select>` | Required; options: placeholder, `Food`, `Transport`, `Fun` |
 
-- Character counter updates on every `input` event starting from the first character typed.
-- On submit: validates all fields; on error, renders inline `<span role="alert">` messages; on success, calls `model.saveExpense()` then triggers full dashboard re-render.
+- On submit: runs `validateInput()`; if errors exist, renders inline `<span class="field-error" role="alert">` next to each invalid field and does not add the transaction.
+- On success: calls `addTransaction()`, then `resetForm()` which clears item name, clears amount, and resets category to placeholder.
 
-### 2. Budget Form (`BudgetForm`)
+### 2. Transaction List
 
-| Field | Type | Validation |
-|---|---|---|
-| Amount | `<input type="number">` | Positive number, required |
-| Category | `<select>` | Non-empty, required |
-| Month | `<input type="month">` | Valid YYYY-MM, required |
+Rendered by `renderList(transactions)` into `<ul id="transaction-list">`.
 
-- On submit: validates; calls `model.saveBudget()` (upsert semantics); re-renders Summary Panel.
+- Each `<li>` displays: item name, formatted amount (e.g., `$12.50`), category label, and a delete `<button>` with a visible label (e.g., "Delete").
+- List is rendered in reverse insertion order (index `transactions.length - 1` down to `0`).
+- When `transactions` is empty, renders a single `<li class="empty-state">` with the message "No transactions recorded yet."
+- The container has `overflow-y: auto` and a fixed `max-height` so it scrolls independently of the rest of the page.
 
-### 3. Category Manager (`CategoryManager`)
+### 3. Total Balance Display
 
-- Lists all categories; default categories show a lock icon and no delete button.
-- Add form: text input (1–50 chars, trimmed, case-insensitive uniqueness check).
-- Delete: if category has associated expenses/budgets, shows a confirmation modal with counts before proceeding.
+Rendered by `renderBalance(transactions)` into `<p id="total-balance">` (or equivalent element) positioned above the transaction list.
 
-### 4. Dashboard (`Dashboard`)
+- Value = sum of all `transaction.amount` values, formatted as `$X.XX`.
+- When `transactions` is empty, displays `$0.00`.
 
-- Month navigation: `<button>` prev/next arrows + `<output>` showing current month label.
-- Summary Panel: table/list of categories with budget, spent, remaining columns; over-budget rows highlighted.
-- Charts section: pie chart canvas + bar chart canvas side by side (stacked on mobile).
-- Empty state: replaces charts and summary with a message when no expenses exist for the month.
+### 4. Pie Chart
 
-### 5. Expense List (`ExpenseList`)
+Rendered by `renderChart(transactions)` onto `<canvas id="spending-chart">` (or via CDN chart library into a container `<div id="chart-container">`).
 
-- Sorted by date descending.
-- Each row: date, category badge, amount, description (truncated), edit/delete buttons.
-- Filter bar: category `<select>`, date-range inputs, search `<input type="search">`.
-- "No results found" message when filters yield no matches.
-
-### 6. Charts (`PieChart`, `BarChart`)
-
-Both rendered on `<canvas>` elements with `role="img"` and `aria-label` describing the chart content.
-
-**PieChart:**
-- Segments proportional to category spending totals.
-- Special case: if all amounts are zero, renders equal segments.
-- Tooltip: `<div>` absolutely positioned, shown on `mousemove`/`touchstart`, hidden on `mouseleave`.
-
-**BarChart:**
-- X-axis: calendar days (default) or ISO weeks (toggle).
-- Y-axis: auto-scaled to max spending value.
-- Tooltip: same mechanism as pie chart.
-
-### 7. Export / Import Controls
-
-- Export CSV: `<button>` triggers `Blob` + `URL.createObjectURL` download.
-- Export JSON: same mechanism, full data snapshot.
-- Import JSON: `<input type="file" accept=".json">` triggers file read, parse, validate, merge.
-
-### 8. Error / Info Banners
-
-- Persistent error banner (localStorage unavailable or corrupted): fixed position, `role="alert"`, `aria-live="assertive"`.
-- Transient info messages (import success, export blocked): `role="status"`, `aria-live="polite"`, auto-dismiss after 4 seconds.
+- When `transactions` is empty, hides the canvas and shows a `<p id="chart-empty">No data to display</p>`.
+- When transactions exist, computes per-category totals and renders slices proportional to `categoryTotal / grandTotal`.
+- Categories with a total of zero are excluded from the chart entirely.
+- Each slice is labeled with the category name and percentage (e.g., "Food 45%").
+- Fixed colors per category (see Data Models section).
+- The canvas has `role="img"` and `aria-label` describing the chart content for accessibility.
 
 ---
 
 ## Data Models
 
-All records are stored as JSON arrays in `localStorage`.
+### Transaction Object
 
-### Expense
-
-```json
+```js
 {
-  "id": "uuid-v4-string",
-  "amount": 42.50,
-  "categoryId": "uuid-v4-string | default-category-key",
-  "date": "2025-05-20",
-  "description": "Optional free text up to 200 chars",
-  "createdAt": "2025-05-20T10:30:00.000Z",
-  "updatedAt": "2025-05-20T10:30:00.000Z"
+  id: "string",          // UUID v4, generated at creation time
+  name: "string",        // Item name, 1–100 characters
+  amount: 42.50,         // Positive number, 0.01–999,999,999.99, up to 2 decimal places
+  category: "Food"       // One of: "Food" | "Transport" | "Fun"
 }
 ```
 
-### Budget
+No date field. No budget field. No custom categories.
 
-```json
-{
-  "id": "uuid-v4-string",
-  "categoryId": "uuid-v4-string | default-category-key",
-  "month": "2025-05",
-  "amount": 500.00,
-  "createdAt": "2025-05-01T00:00:00.000Z",
-  "updatedAt": "2025-05-01T00:00:00.000Z"
+### localStorage Serialization
+
+```js
+const STORAGE_KEY = "expense_budget_visualizer_data";
+
+// Write
+function saveToStorage(transactions) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(transactions));
+  } catch (e) {
+    throw new Error("STORAGE_WRITE_FAILED");
+  }
+}
+
+// Read
+function loadFromStorage() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw === null || raw === "") return [];
+    return JSON.parse(raw); // throws SyntaxError on malformed JSON
+  } catch (e) {
+    throw new Error("STORAGE_READ_FAILED");
+  }
 }
 ```
 
-### Category
-
-```json
-{
-  "id": "string (e.g. 'food' for defaults, uuid-v4 for custom)",
-  "name": "Food",
-  "isDefault": true,
-  "createdAt": "2025-05-01T00:00:00.000Z"
-}
-```
-
-### localStorage Keys
-
-| Key | Value |
-|---|---|
-| `evbv_expenses` | JSON array of Expense objects |
-| `evbv_budgets` | JSON array of Budget objects |
-| `evbv_categories` | JSON array of Category objects |
-
-### Default Categories (seeded on first load)
-
-`food`, `transport`, `housing`, `utilities`, `health`, `entertainment`, `other`
-
-These are written to `evbv_categories` on first load if the key is absent. Their `isDefault: true` flag prevents deletion.
-
-### Validation Rules (Model Layer)
+### Transaction Validation Rules
 
 | Field | Rule |
 |---|---|
-| `amount` | `typeof === 'number' && isFinite && > 0` |
-| `date` | Matches `/^\d{4}-\d{2}-\d{2}$/`, parseable, not after `new Date()` |
-| `categoryId` | Exists in current categories list |
-| `month` | Matches `/^\d{4}-\d{2}$/` |
-| `description` | `string.length <= 200` |
-| Category `name` | Trimmed length 1–50, case-insensitive unique |
+| `name` | Non-empty string after trim; length ≤ 100 |
+| `amount` | Finite number; > 0; ≤ 999,999,999.99; parseable to at most 2 decimal places |
+| `category` | Exactly one of `"Food"`, `"Transport"`, `"Fun"` |
 
 ### ID Generation
 
 ```js
-// UUID v4 without crypto dependency (fallback for older browsers)
 function generateId() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback for older browsers
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
     const r = (Math.random() * 16) | 0;
-    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
   });
 }
 ```
 
-If `crypto.randomUUID` is available, it is preferred.
-
-### Serialization / Deserialization
+### Category Colors (Fixed)
 
 ```js
-// storage.js
-const KEYS = {
-  expenses:   'evbv_expenses',
-  budgets:    'evbv_budgets',
-  categories: 'evbv_categories',
+const CATEGORY_COLORS = {
+  Food:      "#FF6384",
+  Transport: "#36A2EB",
+  Fun:       "#FFCE56"
 };
+```
 
-function readCollection(key) {
-  try {
-    const raw = localStorage.getItem(KEYS[key]);
-    if (raw === null) return [];
-    return JSON.parse(raw); // throws on malformed JSON
-  } catch (e) {
-    throw new StorageError('CORRUPT', key, e);
-  }
+These colors are fixed constants. The same category always renders with the same color. All three colors are visually distinct.
+
+### Currency Formatting
+
+```js
+function formatCurrency(amount) {
+  return "$" + amount.toFixed(2);
 }
+```
 
-function writeCollection(key, data) {
-  try {
-    localStorage.setItem(KEYS[key], JSON.stringify(data));
-  } catch (e) {
-    throw new StorageError('UNAVAILABLE', key, e);
+### Pie Chart Data Computation
+
+```js
+function buildPieData(transactions) {
+  const totals = { Food: 0, Transport: 0, Fun: 0 };
+  for (const tx of transactions) {
+    totals[tx.category] += tx.amount;
   }
+  const grandTotal = totals.Food + totals.Transport + totals.Fun;
+  if (grandTotal === 0) return [];
+
+  return Object.entries(totals)
+    .filter(([, sum]) => sum > 0)
+    .map(([category, sum]) => ({
+      category,
+      amount: sum,
+      proportion: sum / grandTotal,
+      color: CATEGORY_COLORS[category]
+    }));
 }
 ```
 
@@ -249,182 +224,153 @@ function writeCollection(key, data) {
 
 *A property is a characteristic or behavior that should hold true across all valid executions of a system — essentially, a formal statement about what the system should do. Properties serve as the bridge between human-readable specifications and machine-verifiable correctness guarantees.*
 
-### Property 1: Expense Validation Rejects All Invalid Inputs
+### Property 1: Valid Transaction Add Round-Trip
 
-*For any* input object where the amount is non-positive, non-numeric, or absent; or the date is after today, not a valid YYYY-MM-DD string, or absent; or the category is absent or does not exist in the categories collection — the `validateExpense` function SHALL return a non-empty errors object containing at least one entry for each invalid field, and SHALL NOT produce a valid expense record.
+*For any* valid transaction (any non-empty item name up to 100 characters, any amount in [0.01, 999,999,999.99], any category from `{Food, Transport, Fun}`), adding it to the transaction list SHALL result in the list length increasing by exactly 1, and the transaction SHALL be retrievable from `localStorage` with all field values preserved.
 
-**Validates: Requirements 1.2, 1.3**
-
----
-
-### Property 2: Description Length Enforcement
-
-*For any* string of length greater than 200 characters, the `validateExpense` function SHALL reject it with a validation error, and the character-count indicator function SHALL return a value clamped to at most 200.
-
-**Validates: Requirements 1.6, 1.7, 1.8**
+**Validates: Requirements 1.2, 6.1**
 
 ---
 
-### Property 3: Category Name Uniqueness (Case-Insensitive, Trim-Normalized)
+### Property 2: Empty Field Validation Rejection
 
-*For any* existing set of categories and any candidate name whose trimmed, lowercased form matches the trimmed, lowercased name of any existing category, the `addCategory` function SHALL return an error and the categories collection SHALL remain unchanged.
+*For any* form submission where one or more fields (item name, amount, or category) are empty or contain only whitespace, the `validateInput` function SHALL return a non-empty errors object with at least one entry for each missing field, and the transaction list SHALL remain unchanged.
 
-**Validates: Requirements 2.3**
-
----
-
-### Property 4: Budget Upsert Invariant
-
-*For any* category and month, after calling `saveBudget` one or more times with any sequence of amounts, the budgets collection SHALL contain exactly one Budget record for that (categoryId, month) pair, and its amount SHALL equal the value passed in the most recent call.
-
-**Validates: Requirements 3.3**
+**Validates: Requirements 1.3**
 
 ---
 
-### Property 5: Remaining Budget Calculation and Over-Budget Flag
+### Property 3: Invalid Amount Validation Rejection
 
-*For any* category, month, budget amount, and set of expenses, the remaining budget SHALL equal `max(0, budget.amount − sum(expenses where categoryId matches and date falls within month))`, and the over-budget flag SHALL be `true` if and only if the sum of those expenses exceeds `budget.amount`.
+*For any* amount value that is zero, negative, greater than 999,999,999.99, non-numeric (NaN, Infinity), or a non-number type, the `validateInput` function SHALL return an error on the amount field and the transaction list SHALL remain unchanged.
 
-**Validates: Requirements 3.4, 3.5, 4.4**
-
----
-
-### Property 6: Spending Aggregation Correctness
-
-*For any* set of expenses and any selected month, the total-spent value for the month SHALL equal the arithmetic sum of all expense amounts whose date falls within that month, and the per-category totals SHALL each equal the sum of expense amounts for that category within that month.
-
-**Validates: Requirements 4.2, 4.3**
+**Validates: Requirements 1.4**
 
 ---
 
-### Property 7: Dashboard Navigation Boundary
+### Property 4: Form Reset After Successful Add
 
-*For any* non-empty set of expenses, the earliest month the user can navigate to SHALL equal the calendar month of the expense with the smallest date value, and attempting to navigate to any earlier month SHALL be rejected.
+*For any* valid transaction that is successfully added, the item name field SHALL be empty, the amount field SHALL be empty, and the category dropdown SHALL be reset to its placeholder option.
 
-**Validates: Requirements 4.5**
-
----
-
-### Property 8: Filter Conjunction Correctness
-
-*For any* set of expenses and any combination of simultaneously active filters (category, date range, search term), every expense in the filtered result SHALL satisfy ALL active filter conditions, and every expense absent from the result SHALL fail at least one active filter condition.
-
-**Validates: Requirements 6.1, 6.3, 6.5, 6.6**
+**Validates: Requirements 1.5**
 
 ---
 
-### Property 9: Search Case-Insensitivity
+### Property 5: Transaction Rendering Format
 
-*For any* search string `s` and expense list, the filtered result SHALL contain exactly those expenses whose `description.toLowerCase()` contains `s.toLowerCase()` as a substring, and no others.
+*For any* transaction in the list, the rendered HTML for that transaction SHALL contain the transaction's item name as a string, the amount formatted as a currency string matching `$\d+\.\d{2}`, and the category label as one of `Food`, `Transport`, or `Fun`.
 
-**Validates: Requirements 6.8**
-
----
-
-### Property 10: Filter Clear Restores Full List
-
-*For any* expense list and any active filter state, clearing all filters SHALL produce a result set equal to the complete unfiltered expense list.
-
-**Validates: Requirements 6.7**
+**Validates: Requirements 2.1**
 
 ---
 
-### Property 11: Pie Chart Data Integrity
+### Property 6: Delete Button Presence
 
-*For any* set of expenses for a selected month, the data produced by `buildPieData` SHALL have segment percentages that sum to 100 (within floating-point tolerance); when all expense amounts are zero, each category with at least one expense SHALL receive an equal segment.
+*For any* non-empty transaction list, every rendered transaction item SHALL contain a visible, labeled interactive delete button without requiring hover or additional interaction.
+
+**Validates: Requirements 3.1**
+
+---
+
+### Property 7: Delete Correctness
+
+*For any* transaction list containing at least one transaction, deleting a transaction by its unique ID SHALL remove exactly that transaction from the list (list length decreases by 1), update `localStorage` to reflect the removal, and cause the Total Balance to equal the sum of the remaining transactions' amounts.
+
+**Validates: Requirements 3.2, 3.3**
+
+---
+
+### Property 8: Delete Rollback on Storage Failure
+
+*For any* transaction list and any simulated `localStorage.setItem` failure during a delete operation, the in-memory transaction list SHALL be restored to its pre-deletion state, the Total Balance and Chart SHALL reflect the pre-deletion state, and an error indication SHALL be displayed to the user.
+
+**Validates: Requirements 3.4**
+
+---
+
+### Property 9: Total Balance Calculation
+
+*For any* set of transactions, the displayed Total Balance SHALL equal the arithmetic sum of all transaction amounts, formatted as a currency string with exactly 2 decimal places and a leading currency symbol.
+
+**Validates: Requirements 4.1, 4.2, 4.3**
+
+---
+
+### Property 10: Pie Chart Proportion Correctness
+
+*For any* non-empty set of transactions, the pie chart data produced by `buildPieData` SHALL have slice proportions where each slice's proportion equals `categoryTotal / grandTotal`, and the sum of all slice proportions SHALL equal 1.0 within floating-point tolerance (±1e-9).
 
 **Validates: Requirements 5.1**
 
 ---
 
-### Property 12: Bar Chart Day-Grouping Completeness
+### Property 11: Category Color Determinism and Uniqueness
 
-*For any* selected month, the data produced by `buildBarData('daily')` SHALL contain exactly one entry per calendar day in that month (28, 29, 30, or 31 entries depending on the month), with each entry's total equal to the sum of expense amounts on that day.
+*For any* number of render calls with any transaction data, the color assigned to `Food` SHALL always be the same fixed value, the color assigned to `Transport` SHALL always be the same fixed value, the color assigned to `Fun` SHALL always be the same fixed value, and all three colors SHALL be distinct from each other.
 
-**Validates: Requirements 5.2**
-
----
-
-### Property 13: LocalStorage Round-Trip Fidelity
-
-*For any* valid application state (any set of Expenses, Budgets, and Categories), serializing the state to `localStorage` and then deserializing it SHALL produce a state with the same number of records, the same record IDs, and the same field values for every Expense, Budget, and Category.
-
-**Validates: Requirements 7.6, 7.2**
+**Validates: Requirements 5.5**
 
 ---
 
-### Property 14: Export-Import Round-Trip Fidelity
+### Property 12: Zero-Total Category Exclusion from Chart
 
-*For any* valid application state, exporting to JSON and then importing that JSON file into a fresh app instance SHALL produce a state with the same number of Expenses, Budgets, and Categories and the same field values for each record as existed at the time of export.
+*For any* transaction set where at least one category has a total spending amount of zero, `buildPieData` SHALL exclude that category's entry from the returned array, and the remaining entries SHALL still have proportions summing to 1.0.
 
-**Validates: Requirements 8.5, 9.5**
-
----
-
-### Property 15: Import Deduplication by ID
-
-*For any* existing application state and any valid imported JSON file, after a successful import, for every record ID that appeared in both the existing state and the imported file, the resulting state SHALL contain exactly one record with that ID whose field values match the imported record (imported overwrites existing on ID collision).
-
-**Validates: Requirements 9.1**
+**Validates: Requirements 5.6**
 
 ---
 
-### Property 16: CSV Export Contains Exactly the Visible Expenses
+### Property 13: localStorage Round-Trip Fidelity
 
-*For any* active filter state, the CSV export SHALL contain exactly the expenses currently visible in the filtered list — no more, no fewer — with the correct Date, Category, Amount, and Description column values for each row.
+*For any* valid array of transactions, serializing it to `localStorage` via `saveToStorage` and then deserializing it via `loadFromStorage` SHALL produce an array with the same length, the same transaction IDs, and the same field values (`name`, `amount`, `category`) for every transaction.
 
-**Validates: Requirements 8.1, 8.3**
-
----
-
-### Property 17: Import Schema Validation Reports Missing Fields
-
-*For any* JSON object that is missing one or more required fields (id, amount, categoryId, date for expenses; id, categoryId, month, amount for budgets; id, name for categories), the `validateImportSchema` function SHALL return an error that identifies each missing or invalid field by name.
-
-**Validates: Requirements 9.3**
+**Validates: Requirements 6.1, 6.2, 6.3**
 
 ---
 
-### Property 18: Category Deletion Reassigns All Linked Records to "Other"
+### Property 14: Corrupt Storage Graceful Recovery
 
-*For any* custom category that is confirmed for deletion, all Expenses and Budgets that referenced that category SHALL be reassigned to the "Other" category, the deleted category SHALL no longer appear in the categories collection, and the count of affected records reported in the confirmation warning SHALL equal the actual number of Expenses and Budgets that were linked to that category.
+*For any* value stored in `localStorage` that is not valid JSON, or is valid JSON but contains transaction objects missing required fields (`id`, `name`, `amount`, `category`) or with out-of-range/wrong-type field values, the app initialization SHALL discard the corrupt data, initialize with an empty transaction list, and display an error indication to the user.
 
-**Validates: Requirements 2.5, 2.6**
+**Validates: Requirements 6.5**
 
 ---
 
 ## Error Handling
 
-### Storage Errors
+### Storage Write Failure (Add)
 
-| Scenario | Behavior |
-|---|---|
-| `localStorage` unavailable (quota exceeded, private mode) | Catch `DOMException` in `writeCollection`; show persistent `role="alert"` banner; continue in-memory |
-| Malformed JSON in a namespaced key | Catch `SyntaxError` in `readCollection`; show persistent banner describing which key is corrupt; do NOT overwrite; continue in-memory |
-| `localStorage` becomes available again | Banner is dismissed on next successful write |
+- Scenario: `localStorage.setItem` throws (quota exceeded, private browsing restrictions).
+- Behavior: The transaction is NOT added to the in-memory array. An inline error message is shown to the user. The form is not reset.
+
+### Storage Write Failure (Delete)
+
+- Scenario: `localStorage.setItem` throws during a delete operation.
+- Behavior: The in-memory array is rolled back to its pre-deletion snapshot. The UI (list, balance, chart) is re-rendered from the rolled-back state. A persistent error banner with `role="alert"` is shown.
+
+### Corrupt localStorage on Load
+
+- Scenario: The stored value is not valid JSON, or parsed data contains invalid transaction objects.
+- Behavior: The app discards all stored data, initializes with an empty transaction list, and displays a persistent error banner (e.g., "Saved data was corrupted and has been cleared.").
+
+### Missing localStorage Key
+
+- Scenario: The key `expense_budget_visualizer_data` is absent or its value is an empty string.
+- Behavior: The app initializes with an empty transaction list. No error is shown (this is the normal first-run state).
 
 ### Validation Errors
 
-- All validation runs synchronously in the model layer before any write.
-- Errors are returned as a plain object `{ fieldName: 'error message' }`.
-- The view layer renders each error as an inline `<span role="alert" class="field-error">` adjacent to the relevant input.
-- The form is not submitted until all errors are resolved.
-
-### Import Errors
-
-| Scenario | Behavior |
-|---|---|
-| File is not valid JSON | Display error: "File is not valid JSON." No data modified. |
-| File is valid JSON but wrong schema | Display error listing missing/invalid fields. No data modified. |
-| File read error (browser API) | Display error: "Could not read file." No data modified. |
+- Inline `<span class="field-error" role="alert">` elements are rendered adjacent to each invalid field.
+- Errors are cleared on the next successful submission or when the user corrects the field.
+- The form submission is blocked until all validation passes.
 
 ### Chart Edge Cases
 
 | Scenario | Behavior |
 |---|---|
-| No expenses for selected month | Show placeholder text; do not render empty canvas |
-| All expense amounts are zero | Pie chart renders equal segments per category with at least one expense |
-| Single expense | Pie chart renders one full segment; bar chart renders one bar |
+| No transactions | Canvas is hidden; `<p id="chart-empty">No data to display</p>` is shown |
+| One category has zero total | That category's slice is excluded; remaining slices fill 100% |
+| All transactions in one category | One full-circle slice is rendered |
 
 ---
 
@@ -432,63 +378,67 @@ function writeCollection(key, data) {
 
 ### Overview
 
-The testing strategy uses two complementary approaches:
+Two complementary testing approaches are used:
 
-1. **Unit / Example-Based Tests** — verify specific behaviors with concrete inputs
-2. **Property-Based Tests** — verify universal invariants across randomly generated inputs
+1. **Unit / Example-Based Tests** — verify specific behaviors with concrete inputs (edge cases, empty states, specific formatting)
+2. **Property-Based Tests** — verify universal invariants across randomly generated inputs using **[fast-check](https://github.com/dubzzz/fast-check)**
 
-The property-based testing library for this project is **[fast-check](https://github.com/dubzzz/fast-check)** (JavaScript). Since the app is vanilla JS with no build step, tests are run in a Node.js environment using the model and storage modules loaded via `require` / `import` (or a thin test harness that stubs `localStorage`).
+Since the app has no build step, tests run in a Node.js environment. The model functions (`validateInput`, `addTransaction`, `deleteTransaction`, `buildPieData`, `formatCurrency`, `saveToStorage`, `loadFromStorage`) are exported or extracted into a testable module. `localStorage` is stubbed with a simple in-memory mock.
 
 ### Unit Tests
 
 Focus areas:
 
-- **Validation functions**: test each invalid input type explicitly (null, empty string, negative number, future date, etc.)
-- **Model CRUD**: add/edit/delete for each entity type with concrete examples
-- **Filter logic**: specific filter combinations with known datasets
-- **Chart data preparation**: `buildPieData()` and `buildBarData()` with known expense sets
-- **Export formatting**: CSV column order, JSON structure
-- **Import schema validation**: missing fields, wrong types
+- **Validation**: each invalid input type explicitly (null, empty string, whitespace-only name, zero amount, negative amount, amount > 999,999,999.99, NaN, invalid category string)
+- **Empty state rendering**: transaction list shows empty-state message, balance shows `$0.00`, chart shows no-data message
+- **Currency formatting**: `formatCurrency(0)` → `"$0.00"`, `formatCurrency(1234.5)` → `"$1234.50"`, `formatCurrency(999999999.99)` → `"$999999999.99"`
+- **Pie chart empty state**: `buildPieData([])` returns `[]`
+- **Missing/empty localStorage key**: `loadFromStorage()` returns `[]` when key is absent or value is `""`
+- **Corrupt JSON**: `loadFromStorage()` throws when value is malformed JSON
 
 ### Property-Based Tests
 
-Each property test runs a minimum of **100 iterations**. Tests are tagged with:
+Each property test runs a minimum of **100 iterations**. Each test is tagged with a comment:
 
 > `// Feature: expense-budget-visualizer, Property N: <property text>`
 
-| Property | Test Description | Arbitraries |
-|---|---|---|
-| P1 | Expense validation rejects all invalid inputs | `fc.record` with invalid amount/date/category combinations |
-| P2 | Description length enforcement | `fc.string({ minLength: 201, maxLength: 500 })` |
-| P3 | Category name uniqueness (case-insensitive, trim-normalized) | `fc.array(fc.string)` for existing names + duplicate candidate |
-| P4 | Budget upsert invariant | `fc.array` of budget saves for same (category, month) |
-| P5 | Remaining budget calculation and over-budget flag | `fc.array` of expenses + budget amount |
-| P6 | Spending aggregation correctness | `fc.array` of expenses across multiple months/categories |
-| P7 | Dashboard navigation boundary | `fc.array` of expenses with varying dates |
-| P8 | Filter conjunction correctness | `fc.array` of expenses + random filter combinations |
-| P9 | Search case-insensitivity | `fc.string` search terms + `fc.array` of expense descriptions |
-| P10 | Filter clear restores full list | `fc.array` of expenses + random filter state |
-| P11 | Pie chart data integrity | `fc.array` of expenses for a month |
-| P12 | Bar chart day-grouping completeness | `fc.date` for month selection + `fc.array` of expenses |
-| P13 | localStorage round-trip fidelity | `fc.record` for full app state |
-| P14 | Export-import round-trip fidelity | `fc.record` for full app state |
-| P15 | Import deduplication by ID | `fc.array` of records with overlapping IDs |
-| P16 | CSV export contains exactly the visible expenses | `fc.array` of expenses + random filter state |
-| P17 | Import schema validation reports missing fields | `fc.record` with randomly omitted required fields |
-| P18 | Category deletion reassigns all linked records to "Other" | `fc.array` of expenses/budgets linked to a custom category |
+| Property | Arbitraries Used |
+|---|---|
+| P1: Valid transaction add round-trip | `fc.record({ name: fc.string({minLength:1, maxLength:100}).filter(s => s.trim().length > 0), amount: fc.float({min:0.01, max:999999999.99}), category: fc.constantFrom("Food","Transport","Fun") })` |
+| P2: Empty field validation rejection | `fc.record` with one or more fields set to `""` or whitespace-only strings via `fc.constantFrom("", "  ", "\t")` |
+| P3: Invalid amount validation rejection | `fc.oneof(fc.constant(0), fc.float({max:-0.001}), fc.constant(1000000000), fc.constant(NaN), fc.constant(Infinity), fc.string())` |
+| P4: Form reset after successful add | Same arbitraries as P1; verify DOM state after add |
+| P5: Transaction rendering format | `fc.array(validTransactionArb, {minLength:1})` |
+| P6: Delete button presence | `fc.array(validTransactionArb, {minLength:1})` |
+| P7: Delete correctness | `fc.array(validTransactionArb, {minLength:1})` + `fc.nat` to pick index to delete |
+| P8: Delete rollback on storage failure | `fc.array(validTransactionArb, {minLength:1})` + mocked `localStorage.setItem` that throws |
+| P9: Total balance calculation | `fc.array(validTransactionArb)` |
+| P10: Pie chart proportion correctness | `fc.array(validTransactionArb, {minLength:1})` |
+| P11: Category color determinism and uniqueness | `fc.constantFrom("Food","Transport","Fun")` called multiple times |
+| P12: Zero-total category exclusion | `fc.array` of transactions where at least one category has no entries |
+| P13: localStorage round-trip fidelity | `fc.array(validTransactionArb)` |
+| P14: Corrupt storage graceful recovery | `fc.oneof(fc.string(), fc.record({...}).map(r => JSON.stringify({...r, amount: "not-a-number"})))` |
 
 ### Accessibility Testing
 
-- Automated: run [axe-core](https://github.com/dequelabs/axe-core) in a headless browser against the rendered HTML.
-- Manual: keyboard-only navigation walkthrough; screen reader smoke test with NVDA/VoiceOver.
-- Color contrast: verify all text/background pairs meet WCAG 2.1 AA ratios (4.5:1 for normal text, 3:1 for large text).
+- Run [axe-core](https://github.com/dequelabs/axe-core) in a headless browser against the rendered HTML to catch WCAG violations automatically.
+- Manually verify keyboard-only navigation: tab through form fields, submit with Enter, activate delete buttons with Space/Enter.
+- Verify all text/background color pairs in `css/style.css` meet WCAG 2.1 AA contrast ratio (≥ 4.5:1) using the relative luminance formula.
 
 ### Responsive Layout Testing
 
-- Test at 320px, 768px, 1024px, 1440px, and 2560px viewport widths.
-- Verify no horizontal scrollbar, no clipped content, single-column layout below 768px.
+- Test at 320px, 375px, 768px, and 1280px viewport widths.
+- At 320px: verify no horizontal scrollbar, no clipped content, all four components (form, balance, list, chart) are visible and usable.
 
-### Performance Testing
+### File Structure Verification
 
-- Load the app with 1,000 pre-seeded expense records.
-- Measure dashboard render time using `performance.now()` — must be ≤ 300ms (NFR-2).
+```
+project-root/
+├── index.html
+├── css/
+│   └── style.css        ← single CSS file (TC-4)
+└── js/
+    └── app.js           ← single JS file (TC-4)
+```
+
+No other CSS or JS files are loaded except an approved CDN chart library (e.g., Chart.js via `<script src="https://cdn.jsdelivr.net/...">` in `index.html`).
